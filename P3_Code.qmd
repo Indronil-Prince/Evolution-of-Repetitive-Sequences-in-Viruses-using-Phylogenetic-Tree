@@ -1,0 +1,364 @@
+---
+jupyter: python3
+---
+
+```{python}
+#| _cell_guid: b1076dfc-b9ad-4769-8c92-a6c4dae69d19
+#| _uuid: 8f2839f25d086af736a60e9eeb907d3b93b6e0e5
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.062979Z', iopub.status.busy: '2023-04-25T17:26:51.062561Z', iopub.status.idle: '2023-04-25T17:26:51.070277Z', shell.execute_reply: '2023-04-25T17:26:51.068647Z', shell.execute_reply.started: '2023-04-25T17:26:51.062945Z'}
+#| trusted: true
+# This Python 3 environment comes with many helpful analytics libraries installed
+# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python
+# For example, here's several helpful packages to load
+
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
+
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using "Save & Run All" 
+# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.112935Z', iopub.status.busy: '2023-04-25T17:26:51.112536Z', iopub.status.idle: '2023-04-25T17:26:51.119573Z', shell.execute_reply: '2023-04-25T17:26:51.118129Z', shell.execute_reply.started: '2023-04-25T17:26:51.112900Z'}
+#| trusted: true
+#Calculate the Hamming distance between two sequences
+def hamming_distance(seq1, seq2):
+    sum = 0
+    for base1, base2 in zip(seq1, seq2):
+        if base1 != base2:
+            sum+=1
+    return sum  
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.153460Z', iopub.status.busy: '2023-04-25T17:26:51.153037Z', iopub.status.idle: '2023-04-25T17:26:51.161700Z', shell.execute_reply: '2023-04-25T17:26:51.160340Z', shell.execute_reply.started: '2023-04-25T17:26:51.153410Z'}
+#| trusted: true
+#TASK 1
+#Calculate the pairwise Hamming distance matrix between sequences
+def pairwise_hamming_distance(seqs):
+    distance_matrix = [[0 for _ in range(len(seqs))] for _ in range(len(seqs))]
+    for i in range(len(seqs)):
+        for j in range(i+1, len(seqs)):
+            distance_matrix[i][j] = hamming_distance(seqs[i], seqs[j])
+            distance_matrix[j][i] = distance_matrix[i][j]
+    return distance_matrix
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.233769Z', iopub.status.busy: '2023-04-25T17:26:51.233347Z', iopub.status.idle: '2023-04-25T17:26:51.243518Z', shell.execute_reply: '2023-04-25T17:26:51.242117Z', shell.execute_reply.started: '2023-04-25T17:26:51.233731Z'}
+#| trusted: true
+seqs = ["ACCGTTAGT","AACGTCGAT","AACGTCCAT","ACCGTTAAT","AACGTCAGT","ACCGTTAGG"]
+distance_matrix = pairwise_hamming_distance(seqs)
+distance_matrix
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.292692Z', iopub.status.busy: '2023-04-25T17:26:51.292309Z', iopub.status.idle: '2023-04-25T17:26:51.299860Z', shell.execute_reply: '2023-04-25T17:26:51.298532Z', shell.execute_reply.started: '2023-04-25T17:26:51.292658Z'}
+#| trusted: true
+def create_matrix(seqs,distance_matrix):
+    from Bio.Phylo.TreeConstruction import _Matrix
+    distance_matrix_lower=[]
+    for i in range(0,len(distance_matrix)):
+        dist=[]
+        for j in range(0,i+1):
+            dist.append(distance_matrix[i][j])
+        distance_matrix_lower.append(dist)
+        
+    m = _Matrix(seqs,distance_matrix_lower)
+    m.sequence = seqs
+    return m
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.320444Z', iopub.status.busy: '2023-04-25T17:26:51.320002Z', iopub.status.idle: '2023-04-25T17:26:51.328563Z', shell.execute_reply: '2023-04-25T17:26:51.327240Z', shell.execute_reply.started: '2023-04-25T17:26:51.320405Z'}
+#| trusted: true
+m = create_matrix(seqs,distance_matrix)
+m.sequence
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.405987Z', iopub.status.busy: '2023-04-25T17:26:51.405574Z', iopub.status.idle: '2023-04-25T17:26:51.414921Z', shell.execute_reply: '2023-04-25T17:26:51.413559Z', shell.execute_reply.started: '2023-04-25T17:26:51.405951Z'}
+#| trusted: true
+#TASK 2
+#Build a rooted phylogenetic tree using a given method
+from Bio.Phylo.TreeConstruction import DistanceMatrix
+from Bio.Phylo.TreeConstruction import DistanceTreeConstructor
+from Bio import Phylo
+
+def build_tree(distance_matrix, method, outgroup=None):
+   # Convert the distance matrix to a Bio.Phylo DistanceMatrix object
+    dm = DistanceMatrix(names=distance_matrix.names, matrix=distance_matrix.matrix)
+
+    # Construct the tree using the Neighbor Joining algorithm
+    constructor = DistanceTreeConstructor()
+    if method == 'upgma':
+        tree = constructor.upgma(dm)
+    elif method == 'nj':
+        tree = constructor.nj(dm)
+        #Choose a root for the tree
+        tree.root_with_outgroup({'name': outgroup})
+
+    return tree
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.450851Z', iopub.status.busy: '2023-04-25T17:26:51.450019Z', iopub.status.idle: '2023-04-25T17:26:51.681792Z', shell.execute_reply: '2023-04-25T17:26:51.680499Z', shell.execute_reply.started: '2023-04-25T17:26:51.450809Z'}
+#| trusted: true
+tree_upgma=build_tree(m,'upgma')
+tree_upgma.ladderize()
+Phylo.draw(tree_upgma,branch_labels=lambda branch: branch.branch_length)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.684225Z', iopub.status.busy: '2023-04-25T17:26:51.683793Z', iopub.status.idle: '2023-04-25T17:26:51.690786Z', shell.execute_reply: '2023-04-25T17:26:51.689386Z', shell.execute_reply.started: '2023-04-25T17:26:51.684187Z'}
+#| trusted: true
+Phylo.draw_ascii(tree_upgma,)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.692944Z', iopub.status.busy: '2023-04-25T17:26:51.692408Z', iopub.status.idle: '2023-04-25T17:26:51.971978Z', shell.execute_reply: '2023-04-25T17:26:51.970761Z', shell.execute_reply.started: '2023-04-25T17:26:51.692866Z'}
+#| trusted: true
+tree_nj=build_tree(m,'nj',"AACGTCGAT")
+Phylo.draw(tree_nj,branch_labels=lambda branch: branch.branch_length)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.975184Z', iopub.status.busy: '2023-04-25T17:26:51.974833Z', iopub.status.idle: '2023-04-25T17:26:51.988755Z', shell.execute_reply: '2023-04-25T17:26:51.987407Z', shell.execute_reply.started: '2023-04-25T17:26:51.975150Z'}
+#| trusted: true
+#TASK 3
+# Infer the ancestral sequences in a phylogenetic tree using the small parsimony algorithm.
+def small_parsimony(tree):
+    # Initialize the score and sequence for each node
+    for node in tree.find_clades(order='postorder'):
+        node.score = []
+        if node.is_terminal():
+            for idx in range(9):
+                node.score.append({base: 0 if base == node.name[idx] else float('inf') for base in ['A', 'C', 'G', 'T']})
+        
+        else:
+            for idx in range(9):
+                node.score.append({base: float('inf') for base in ['A', 'C', 'G', 'T']})
+            
+            
+            for child in node.clades:
+                total_score = []
+                for idx in range(9):
+                    child_score = {}
+                    for base in ['A', 'C', 'G', 'T']:
+                        temp=[]
+                        for b in ['A', 'C', 'G', 'T']:
+                            temp.append((child.score[idx][b]) + (0 if b == base else 1))
+                        child_score.update({base:min(temp)})
+                    total_score.append(child_score)
+                    for b in ['A', 'C', 'G', 'T']:
+                        if total_score[idx][b] < node.score[idx][b]:
+                            node.score[idx][b] = total_score[idx][b]
+                            print(child_score)
+                            
+    for node in tree.find_clades(order='postorder'):            
+        name = ''
+        if not node.is_terminal():
+            for idx in range(9):
+                for base in ['A', 'C', 'G', 'T']:
+                    if node.score[idx][base] == min(node.score[idx].values()):
+                        name += base 
+                        
+            print(node.name+": "+name)
+            node.name=name
+
+    return tree
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:51.990612Z', iopub.status.busy: '2023-04-25T17:26:51.990144Z', iopub.status.idle: '2023-04-25T17:26:52.008977Z', shell.execute_reply: '2023-04-25T17:26:52.007716Z', shell.execute_reply.started: '2023-04-25T17:26:51.990573Z'}
+#| trusted: true
+tree1=small_parsimony(tree_upgma)
+for node1 in tree1.find_clades(order='postorder'):
+    print(node1.name, node1.score)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.011259Z', iopub.status.busy: '2023-04-25T17:26:52.010506Z', iopub.status.idle: '2023-04-25T17:26:52.294296Z', shell.execute_reply: '2023-04-25T17:26:52.292316Z', shell.execute_reply.started: '2023-04-25T17:26:52.011207Z'}
+#| trusted: true
+Phylo.draw(tree1)
+```
+
+```{python}
+virus_names = ['SARS-CoV-2','MERS-CoV','Bat-CoV','SARS-CoV','Pangolin-CoV']
+with open('sars_cov_2.txt') as f:
+    sars2 = f.read()
+with open('mers.txt') as f:
+    mers = f.read()
+with open('bat_cov.txt') as f:
+    bat = f.read()
+with open('sars.txt') as f:
+    sars = f.read()
+with open('pangolin_cov.txt') as f:
+    pang = f.read()
+    
+virus_seqs = [sars2,mers,bat,sars,pang]
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.568547Z', iopub.status.busy: '2023-04-25T17:26:52.568175Z', iopub.status.idle: '2023-04-25T17:26:52.577535Z', shell.execute_reply: '2023-04-25T17:26:52.576150Z', shell.execute_reply.started: '2023-04-25T17:26:52.568510Z'}
+#| trusted: true
+#TASK 4
+#BetterFrequentWords() function
+def BetterFrequentWords(text, k):
+    freqPatterns = []
+    freqMap = FrequencyMap(text, k)
+    maxCount = max(freqMap.values())
+    for pattern, count in freqMap.items():
+        if count == maxCount:
+            freqPatterns.append(pattern)
+    return freqPatterns[0]
+
+def FrequencyMap(text, k):
+    freqMap = {}
+    n = len(text)
+    for i in range(n - k + 1):
+        pattern = text[i:i+k]
+        if pattern not in freqMap:
+            freqMap[pattern] = 1
+        else:
+            freqMap[pattern] += 1
+    return freqMap
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.579792Z', iopub.status.busy: '2023-04-25T17:26:52.579446Z', iopub.status.idle: '2023-04-25T17:26:52.662854Z', shell.execute_reply: '2023-04-25T17:26:52.661634Z', shell.execute_reply.started: '2023-04-25T17:26:52.579756Z'}
+#| trusted: true
+freq_9mers = []
+for seq in virus_seqs:
+    freq_9mers.append(BetterFrequentWords(seq, 9))
+
+freq_9mers
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.664907Z', iopub.status.busy: '2023-04-25T17:26:52.664559Z', iopub.status.idle: '2023-04-25T17:26:52.673843Z', shell.execute_reply: '2023-04-25T17:26:52.672583Z', shell.execute_reply.started: '2023-04-25T17:26:52.664874Z'}
+#| trusted: true
+distance_matrix = pairwise_hamming_distance(freq_9mers)
+distance_matrix
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.678075Z', iopub.status.busy: '2023-04-25T17:26:52.677667Z', iopub.status.idle: '2023-04-25T17:26:52.688623Z', shell.execute_reply: '2023-04-25T17:26:52.687158Z', shell.execute_reply.started: '2023-04-25T17:26:52.678023Z'}
+#| trusted: true
+from Bio.Phylo.TreeConstruction import _Matrix
+
+distance_matrix_lower=[]
+for i in range(0,len(distance_matrix)):
+    dist=[]
+    for j in range(0,i+1):
+        dist.append(distance_matrix[i][j])
+    distance_matrix_lower.append(dist)
+    
+
+m = _Matrix(virus_names,distance_matrix_lower)
+m
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.690583Z', iopub.status.busy: '2023-04-25T17:26:52.690122Z', iopub.status.idle: '2023-04-25T17:26:52.939263Z', shell.execute_reply: '2023-04-25T17:26:52.937918Z', shell.execute_reply.started: '2023-04-25T17:26:52.690543Z'}
+#| trusted: true
+tree_upgma=build_tree(m,'upgma')
+tree_upgma.ladderize()
+Phylo.draw(tree_upgma,branch_labels=lambda branch: branch.branch_length)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.941763Z', iopub.status.busy: '2023-04-25T17:26:52.940909Z', iopub.status.idle: '2023-04-25T17:26:52.947923Z', shell.execute_reply: '2023-04-25T17:26:52.946785Z', shell.execute_reply.started: '2023-04-25T17:26:52.941719Z'}
+#| trusted: true
+Phylo.draw_ascii(tree_upgma,)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:52.950423Z', iopub.status.busy: '2023-04-25T17:26:52.949090Z', iopub.status.idle: '2023-04-25T17:26:53.569341Z', shell.execute_reply: '2023-04-25T17:26:53.567887Z', shell.execute_reply.started: '2023-04-25T17:26:52.950381Z'}
+#| trusted: true
+from Bio import Phylo, AlignIO
+import subprocess
+import matplotlib
+import matplotlib.pyplot as plt
+from Bio.Phylo import draw
+
+plt.rc('font', size=10)         
+plt.rc('axes', titlesize=12)     
+plt.rc('xtick', labelsize=10)   
+plt.rc('ytick', labelsize=10)   
+plt.rc('figure', titlesize=18)   
+
+draw(tree_upgma, do_show=False,branch_labels=lambda branch: branch.branch_length)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:53.571780Z', iopub.status.busy: '2023-04-25T17:26:53.570903Z', iopub.status.idle: '2023-04-25T17:26:53.580308Z', shell.execute_reply: '2023-04-25T17:26:53.578773Z', shell.execute_reply.started: '2023-04-25T17:26:53.571723Z'}
+#| trusted: true
+print(tree_upgma)
+```
+
+```{python}
+#TASK E1
+virus_names2 = ['HIV', 'Adeno', 'Ebola', 'HepatitisB']
+with open('hiv.txt') as f:
+    hiv = f.read()
+with open('adeno.txt') as f:
+    adeno = f.read()
+with open('ebola.txt') as f:
+    ebola = f.read()
+with open('hepB.txt') as f:
+    hepB = f.read()
+
+virus_seqs2 = [hiv,adeno,ebola,hepB]
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:53.629587Z', iopub.status.busy: '2023-04-25T17:26:53.629113Z', iopub.status.idle: '2023-04-25T17:26:53.671936Z', shell.execute_reply: '2023-04-25T17:26:53.670513Z', shell.execute_reply.started: '2023-04-25T17:26:53.629537Z'}
+#| trusted: true
+freq_9mers2 = []
+for seq in virus_seqs2:
+    freq_9mers2.append(BetterFrequentWords(seq, 9))
+
+#freq_9mers2_use = [freq_9mers2[0][2],freq_9mers2[1][0],freq_9mers2[2][1],freq_9mers2[3][6]]
+freq_9mers2_use = freq_9mers2
+freq_9mers2_use
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:53.676880Z', iopub.status.busy: '2023-04-25T17:26:53.676342Z', iopub.status.idle: '2023-04-25T17:26:53.685938Z', shell.execute_reply: '2023-04-25T17:26:53.684176Z', shell.execute_reply.started: '2023-04-25T17:26:53.676825Z'}
+#| trusted: true
+distance_matrix2 = pairwise_hamming_distance(freq_9mers2_use)
+distance_matrix2
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:53.688749Z', iopub.status.busy: '2023-04-25T17:26:53.688040Z', iopub.status.idle: '2023-04-25T17:26:53.702758Z', shell.execute_reply: '2023-04-25T17:26:53.701382Z', shell.execute_reply.started: '2023-04-25T17:26:53.688693Z'}
+#| trusted: true
+m2 = create_matrix(freq_9mers2_use,distance_matrix2)
+m2.sequence = freq_9mers2_use
+m2.sequence, m2.names, m2.matrix
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:26:53.706185Z', iopub.status.busy: '2023-04-25T17:26:53.705173Z', iopub.status.idle: '2023-04-25T17:26:53.932341Z', shell.execute_reply: '2023-04-25T17:26:53.930656Z', shell.execute_reply.started: '2023-04-25T17:26:53.706125Z'}
+#| trusted: true
+tree_upgma2=build_tree(m2,'upgma')
+tree_upgma2.ladderize()
+Phylo.draw(tree_upgma2,branch_labels=lambda branch: branch.branch_length)
+```
+
+```{python}
+#| execution: {iopub.execute_input: '2023-04-25T17:27:04.035558Z', iopub.status.busy: '2023-04-25T17:27:04.035072Z', iopub.status.idle: '2023-04-25T17:27:04.205708Z', shell.execute_reply: '2023-04-25T17:27:04.204327Z', shell.execute_reply.started: '2023-04-25T17:27:04.035450Z'}
+#| trusted: true
+tree3=small_parsimony(tree_upgma2)
+Phylo.draw(tree3)
+```
+
